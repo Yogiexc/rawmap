@@ -25,3 +25,4 @@
 ## 4. Typography
 - **UI & Headers:** `Inter` or system sans-serif (`font-sans`), tight tracking (`tracking-tight`).
 - **Code Editor, Node Keys & Data Types:** `JetBrains Mono` or `Fira Code` (`font-mono`), `text-xs` (12px) for node rows to maximize screen real estate.
+

@@ -1,12 +1,13 @@
 import type { Node, Edge } from '@xyflow/react';
 import dagre from 'dagre';
-import type { FieldItem, SchemaNodeData } from '../components/SchemaNode';
+import type { NodeField, NodeData } from '../components/SchemaNode';
 
 export type DetectedFormat = 'sql' | 'json' | 'csv' | 'unknown';
 
 export interface ParseResult {
   format: DetectedFormat;
-  nodes: Node<SchemaNodeData>[];
+  detectedType: string;
+  nodes: Node<NodeData>[];
   edges: Edge[];
   error?: string;
   stats: {
@@ -17,29 +18,26 @@ export interface ParseResult {
 }
 
 /**
- * Heuristics to detect whether text is SQL DDL, JSON, or CSV
+ * Heuristics to detect format
  */
 export function detectFormat(raw: string): DetectedFormat {
   const trimmed = raw.trim();
   if (!trimmed) return 'unknown';
 
-  // Check JSON
   if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
     try {
       JSON.parse(trimmed);
       return 'json';
     } catch {
-      // Might still be JSON with minor syntax or partial, let's keep checking
+      // ignore
     }
   }
 
-  // Check SQL DDL
   const upper = trimmed.toUpperCase();
   if (upper.includes('CREATE TABLE') || upper.includes('REFERENCES') || upper.includes('PRIMARY KEY')) {
     return 'sql';
   }
 
-  // Check CSV: contains comma/tab separated rows, at least 2 lines
   const lines = trimmed.split(/\r?\n/).filter((l) => l.trim().length > 0);
   if (lines.length >= 2) {
     const firstLineCommas = (lines[0].match(/,/g) || []).length;
@@ -53,18 +51,18 @@ export function detectFormat(raw: string): DetectedFormat {
 }
 
 /**
- * Layout nodes using Dagre
+ * Dagre layout
  */
 export function applyDagreLayout(
-  nodes: Node<SchemaNodeData>[],
+  nodes: Node<NodeData>[],
   edges: Edge[],
   direction: 'LR' | 'TB' = 'LR'
-): { nodes: Node<SchemaNodeData>[]; edges: Edge[] } {
+): { nodes: Node<NodeData>[]; edges: Edge[] } {
   const g = new dagre.graphlib.Graph();
   g.setGraph({
     rankdir: direction,
-    nodesep: 45,
-    ranksep: 80,
+    nodesep: 40,
+    ranksep: 75,
     marginx: 40,
     marginy: 40,
   });
@@ -72,8 +70,8 @@ export function applyDagreLayout(
 
   nodes.forEach((node) => {
     const fieldCount = node.data.fields?.length || 1;
-    const estHeight = 44 + fieldCount * 28 + 20;
-    const estWidth = 280;
+    const estHeight = 48 + fieldCount * 28 + 24;
+    const estWidth = 288;
     g.setNode(node.id, { width: estWidth, height: estHeight });
   });
 
@@ -86,8 +84,8 @@ export function applyDagreLayout(
   const layoutedNodes = nodes.map((node) => {
     const nodeWithPos = g.node(node.id);
     const fieldCount = node.data.fields?.length || 1;
-    const estHeight = 44 + fieldCount * 28 + 20;
-    const estWidth = 280;
+    const estHeight = 48 + fieldCount * 28 + 24;
+    const estWidth = 288;
 
     return {
       ...node,
@@ -102,10 +100,10 @@ export function applyDagreLayout(
 }
 
 /**
- * Parse SQL CREATE TABLE DDL
+ * Parse SQL
  */
-function parseSQL(raw: string): { nodes: Node<SchemaNodeData>[]; edges: Edge[] } {
-  const nodes: Node<SchemaNodeData>[] = [];
+function parseSQL(raw: string): { nodes: Node<NodeData>[]; edges: Edge[] } {
+  const nodes: Node<NodeData>[] = [];
   const edges: Edge[] = [];
 
   const tableRegex = /CREATE\s+TABLE(?:\s+IF\s+NOT\s+EXISTS)?\s+["`]?([a-zA-Z0-9_]+)["`]?\s*\(([\s\S]*?)\)(?:;|$)/gi;
@@ -115,7 +113,7 @@ function parseSQL(raw: string): { nodes: Node<SchemaNodeData>[]; edges: Edge[] }
     const tableName = match[1];
     const body = match[2];
 
-    const fields: FieldItem[] = [];
+    const fields: NodeField[] = [];
     const columnDefinitions = splitByCommaOutsideParens(body);
 
     columnDefinitions.forEach((colDef) => {
@@ -124,7 +122,6 @@ function parseSQL(raw: string): { nodes: Node<SchemaNodeData>[]; edges: Edge[] }
 
       const upperCol = cleanCol.toUpperCase();
 
-      // Check table-level PRIMARY KEY (col1, col2)
       if (upperCol.startsWith('PRIMARY KEY') || (upperCol.startsWith('CONSTRAINT') && upperCol.includes('PRIMARY KEY'))) {
         const pkMatch = cleanCol.match(/\(([^)]+)\)/);
         if (pkMatch) {
@@ -136,34 +133,28 @@ function parseSQL(raw: string): { nodes: Node<SchemaNodeData>[]; edges: Edge[] }
         return;
       }
 
-      // Check table-level FOREIGN KEY
       if (upperCol.startsWith('FOREIGN KEY') || (upperCol.includes('FOREIGN KEY') && upperCol.includes('REFERENCES'))) {
         const fkMatch = cleanCol.match(/FOREIGN\s+KEY\s*\(([^)]+)\)\s*REFERENCES\s+["`]?([a-zA-Z0-9_]+)["`]?\s*(?:\(([^)]+)\))?/i);
         if (fkMatch) {
           const colName = fkMatch[1].trim().replace(/["`]/g, '');
           const targetTable = fkMatch[2].trim();
-          const targetCol = (fkMatch[3] || 'id').trim().replace(/["`]/g, '');
 
           const existingField = fields.find((f) => f.name.toLowerCase() === colName.toLowerCase());
           if (existingField) {
             existingField.isFK = true;
-            existingField.refTable = targetTable;
           }
 
           edges.push({
-            id: `edge-${tableName}-${colName}->${targetTable}-${targetCol}`,
+            id: `edge-${tableName}-${colName}->${targetTable}`,
             source: tableName,
             target: targetTable,
-            sourceHandle: `field-out-${tableName}_${colName}`,
-            targetHandle: `field-in-${targetTable}_${targetCol}`,
             animated: true,
-            style: { stroke: '#6366F1', strokeWidth: 2 },
+            style: { stroke: '#6366F1', strokeWidth: 1.8 },
           });
         }
         return;
       }
 
-      // Individual Column definition: col_name TYPE constraints
       const parts = cleanCol.split(/\s+/);
       if (parts.length >= 2) {
         const colName = parts[0].replace(/["`]/g, '');
@@ -172,34 +163,25 @@ function parseSQL(raw: string): { nodes: Node<SchemaNodeData>[]; edges: Edge[] }
         const isPK = upperCol.includes('PRIMARY KEY');
         const hasInlineRef = upperCol.includes('REFERENCES');
 
-        let refTable: string | undefined;
-        let refCol: string | undefined;
-
         if (hasInlineRef) {
           const refMatch = cleanCol.match(/REFERENCES\s+["`]?([a-zA-Z0-9_]+)["`]?\s*(?:\(([^)]+)\))?/i);
           if (refMatch) {
-            refTable = refMatch[1];
-            refCol = refMatch[2] ? refMatch[2].replace(/["`]/g, '') : 'id';
-
+            const targetTable = refMatch[1];
             edges.push({
-              id: `edge-${tableName}-${colName}->${refTable}-${refCol}`,
+              id: `edge-${tableName}-${colName}->${targetTable}`,
               source: tableName,
-              target: refTable,
-              sourceHandle: `field-out-${tableName}_${colName}`,
-              targetHandle: `field-in-${refTable}_${refCol}`,
+              target: targetTable,
               animated: true,
-              style: { stroke: '#6366F1', strokeWidth: 2 },
+              style: { stroke: '#6366F1', strokeWidth: 1.8 },
             });
           }
         }
 
         fields.push({
-          id: `${tableName}_${colName}`,
           name: colName,
           type: colType.toUpperCase(),
           isPK,
           isFK: hasInlineRef,
-          refTable,
         });
       }
     });
@@ -209,8 +191,8 @@ function parseSQL(raw: string): { nodes: Node<SchemaNodeData>[]; edges: Edge[] }
       type: 'schemaNode',
       position: { x: 0, y: 0 },
       data: {
-        title: tableName,
-        category: 'sql',
+        label: tableName,
+        type: 'table',
         fields,
       },
     });
@@ -243,36 +225,34 @@ function splitByCommaOutsideParens(str: string): string[] {
 }
 
 /**
- * Parse JSON into hierarchical nodes & edges
+ * Parse JSON
  */
-function parseJSON(raw: string): { nodes: Node<SchemaNodeData>[]; edges: Edge[] } {
-  const nodes: Node<SchemaNodeData>[] = [];
+function parseJSON(raw: string): { nodes: Node<NodeData>[]; edges: Edge[] } {
+  const nodes: Node<NodeData>[] = [];
   const edges: Edge[] = [];
 
   const parsed = JSON.parse(raw);
 
-  function traverse(obj: any, nodeId: string, title: string, parentId?: string) {
-    const fields: FieldItem[] = [];
+  function traverse(obj: any, nodeId: string, label: string, parentId?: string) {
+    const fields: NodeField[] = [];
 
     if (Array.isArray(obj)) {
       fields.push({
-        id: `${nodeId}_length`,
         name: 'item_count',
         type: 'number',
-        sampleValue: String(obj.length),
+        sample: String(obj.length),
       });
 
       if (obj.length > 0) {
         const sampleItem = obj[0];
         if (typeof sampleItem === 'object' && sampleItem !== null) {
           const childId = `${nodeId}_item`;
-          traverse(sampleItem, childId, `${title}[0]`, nodeId);
+          traverse(sampleItem, childId, `${label}[0]`, nodeId);
         } else {
           fields.push({
-            id: `${nodeId}_sample`,
             name: 'items_type',
             type: typeof sampleItem,
-            sampleValue: String(sampleItem),
+            sample: String(sampleItem),
           });
         }
       }
@@ -283,19 +263,17 @@ function parseJSON(raw: string): { nodes: Node<SchemaNodeData>[]; edges: Edge[] 
         if (value !== null && typeof value === 'object') {
           const childId = `${nodeId}_${key}`;
           fields.push({
-            id: `${nodeId}_${key}`,
             name: key,
             type: valType,
-            sampleValue: Array.isArray(value) ? `[${value.length}]` : '{...}',
+            sample: Array.isArray(value) ? `[${value.length}]` : '{...}',
           });
 
           traverse(value, childId, key, nodeId);
         } else {
           fields.push({
-            id: `${nodeId}_${key}`,
             name: key,
             type: value === null ? 'null' : valType,
-            sampleValue: value === null ? 'null' : String(value),
+            sample: value === null ? 'null' : String(value),
           });
         }
       });
@@ -306,8 +284,8 @@ function parseJSON(raw: string): { nodes: Node<SchemaNodeData>[]; edges: Edge[] 
       type: 'schemaNode',
       position: { x: 0, y: 0 },
       data: {
-        title,
-        category: 'json',
+        label,
+        type: 'object',
         fields,
       },
     });
@@ -318,7 +296,7 @@ function parseJSON(raw: string): { nodes: Node<SchemaNodeData>[]; edges: Edge[] 
         source: parentId,
         target: nodeId,
         animated: true,
-        style: { stroke: '#EC4899', strokeWidth: 2 },
+        style: { stroke: '#EC4899', strokeWidth: 1.8 },
       });
     }
   }
@@ -328,10 +306,10 @@ function parseJSON(raw: string): { nodes: Node<SchemaNodeData>[]; edges: Edge[] 
 }
 
 /**
- * Parse CSV into Schema node + preview nodes
+ * Parse CSV
  */
-function parseCSV(raw: string): { nodes: Node<SchemaNodeData>[]; edges: Edge[] } {
-  const nodes: Node<SchemaNodeData>[] = [];
+function parseCSV(raw: string): { nodes: Node<NodeData>[]; edges: Edge[] } {
+  const nodes: Node<NodeData>[] = [];
   const edges: Edge[] = [];
 
   const lines = raw.trim().split(/\r?\n/).filter((l) => l.trim().length > 0);
@@ -340,7 +318,7 @@ function parseCSV(raw: string): { nodes: Node<SchemaNodeData>[]; edges: Edge[] }
   const headers = lines[0].split(',').map((h) => h.trim().replace(/^["']|["']$/g, ''));
   const rows = lines.slice(1).map((line) => line.split(',').map((c) => c.trim().replace(/^["']|["']$/g, '')));
 
-  const fields: FieldItem[] = headers.map((header, colIdx) => {
+  const fields: NodeField[] = headers.map((header, colIdx) => {
     let inferredType = 'string';
     const sampleValues = rows.slice(0, 5).map((r) => r[colIdx]).filter(Boolean);
 
@@ -353,50 +331,48 @@ function parseCSV(raw: string): { nodes: Node<SchemaNodeData>[]; edges: Edge[] }
     const isPK = header.toLowerCase() === 'id' || header.toLowerCase().endsWith('_id');
 
     return {
-      id: `csv_col_${colIdx}`,
       name: header,
       type: inferredType,
       isPK,
-      sampleValue: sampleValues[0] || '',
+      sample: sampleValues[0] || '',
     };
   });
 
   nodes.push({
-    id: 'csv_schema',
+    id: 'csv_dataset',
     type: 'schemaNode',
     position: { x: 0, y: 0 },
     data: {
-      title: 'CSV Dataset Schema',
-      category: 'csv',
+      label: 'CSV Dataset',
+      type: 'csv',
       rowCount: rows.length,
       fields,
     },
   });
 
-  const previewRows = rows.slice(0, 3);
+  const previewRows = rows.slice(0, 2);
   previewRows.forEach((row, rIdx) => {
-    const rowFields: FieldItem[] = headers.map((header, colIdx) => ({
-      id: `row_${rIdx}_${colIdx}`,
+    const rowFields: NodeField[] = headers.map((header, colIdx) => ({
       name: header,
       type: 'value',
-      sampleValue: row[colIdx] || '',
+      sample: row[colIdx] || '',
     }));
 
-    const previewId = `csv_row_${rIdx + 1}`;
+    const previewId = `row_${rIdx + 1}`;
     nodes.push({
       id: previewId,
       type: 'schemaNode',
       position: { x: 0, y: 0 },
       data: {
-        title: `Row Sample #${rIdx + 1}`,
-        category: 'csv',
+        label: `Row #${rIdx + 1}`,
+        type: 'csv',
         fields: rowFields,
       },
     });
 
     edges.push({
-      id: `edge-csv-schema->${previewId}`,
-      source: 'csv_schema',
+      id: `edge-csv->${previewId}`,
+      source: 'csv_dataset',
       target: previewId,
       animated: true,
       style: { stroke: '#10B981', strokeWidth: 1.5, strokeDasharray: '4 4' },
@@ -409,30 +385,32 @@ function parseCSV(raw: string): { nodes: Node<SchemaNodeData>[]; edges: Edge[] }
 /**
  * Universal Auto-Parser
  */
-export function parseUniversal(
+export function parseUniversalInput(
   rawInput: string,
   direction: 'LR' | 'TB' = 'LR'
 ): ParseResult {
   const format = detectFormat(rawInput);
-  let parsed = { nodes: [] as Node<SchemaNodeData>[], edges: [] as Edge[] };
+  let parsed = { nodes: [] as Node<NodeData>[], edges: [] as Edge[] };
   let error: string | undefined;
+  let detectedType = 'Unknown Format';
 
-  try {
-    if (format === 'json') {
+  if (format === 'sql') {
+    detectedType = 'SQL DDL';
+    parsed = parseSQL(rawInput);
+  } else if (format === 'json') {
+    detectedType = 'Nested JSON';
+    parsed = parseJSON(rawInput);
+  } else if (format === 'csv') {
+    detectedType = 'Analytics CSV';
+    parsed = parseCSV(rawInput);
+  } else {
+    try {
       parsed = parseJSON(rawInput);
-    } else if (format === 'sql') {
+      detectedType = 'JSON Payload';
+    } catch {
       parsed = parseSQL(rawInput);
-    } else if (format === 'csv') {
-      parsed = parseCSV(rawInput);
-    } else {
-      try {
-        parsed = parseJSON(rawInput);
-      } catch {
-        parsed = parseSQL(rawInput);
-      }
+      detectedType = 'SQL Schema';
     }
-  } catch (err: any) {
-    error = err.message || 'Failed to parse input';
   }
 
   const { nodes: layoutedNodes, edges: layoutedEdges } = applyDagreLayout(
@@ -445,6 +423,7 @@ export function parseUniversal(
 
   return {
     format,
+    detectedType,
     nodes: layoutedNodes,
     edges: layoutedEdges,
     error,
@@ -456,41 +435,4 @@ export function parseUniversal(
   };
 }
 
-/**
- * Export graph as clean LLM Context Markdown
- */
-export function generateLLMContext(nodes: Node<SchemaNodeData>[], edges: Edge[]): string {
-  let output = `# RawMap Architecture & Data Context\n\n`;
-  output += `Generated by RawMap (https://rawmap.vercel.app)\n\n`;
-  output += `## Overview\n`;
-  output += `- Total Entities / Nodes: ${nodes.length}\n`;
-  output += `- Total Relationships / Edges: ${edges.length}\n\n`;
-
-  output += `## Entities & Schemas\n\n`;
-  nodes.forEach((node) => {
-    output += `### ${node.data.title} (${node.data.category || 'entity'})\n`;
-    if (node.data.rowCount !== undefined) {
-      output += `*Record Count: ${node.data.rowCount}*\n`;
-    }
-    output += `| Field Name | Type | Key / Constraint | Sample Value |\n`;
-    output += `| :--- | :--- | :--- | :--- |\n`;
-
-    node.data.fields?.forEach((f) => {
-      let keyBadge = '-';
-      if (f.isPK) keyBadge = 'PRIMARY KEY';
-      else if (f.isFK) keyBadge = `FOREIGN KEY -> ${f.refTable || 'Ref'}`;
-
-      output += `| \`${f.name}\` | \`${f.type}\` | ${keyBadge} | ${f.sampleValue || '-'} |\n`;
-    });
-    output += `\n`;
-  });
-
-  if (edges.length > 0) {
-    output += `## Relationships & Foreign Keys\n\n`;
-    edges.forEach((edge) => {
-      output += `- \`${edge.source}\` ➔ \`${edge.target}\`\n`;
-    });
-  }
-
-  return output;
-}
+export const parseUniversal = parseUniversalInput;

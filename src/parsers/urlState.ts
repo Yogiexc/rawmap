@@ -50,3 +50,4 @@ export function decodeHashToState(hash: string): { code: string; direction: 'LR'
     return null;
   }
 }
+

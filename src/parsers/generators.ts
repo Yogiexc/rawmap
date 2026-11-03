@@ -152,3 +152,4 @@ function mapToTypeScriptType(typeStr: string): string {
   if (t.includes('object') || t.includes('json')) return 'Record<string, any>';
   return 'string';
 }
+

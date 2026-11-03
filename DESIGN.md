@@ -1,26 +1,24 @@
-# RawMap High-Craft Design System (`DESIGN.md`)
+# RawMap Cyberpunk Cinematic Design System (`DESIGN.md`)
 
-## 1. Visual Direction & Philosophy
-- **Aesthetic:** Ultra-refined Silicon Valley AI Studio (Linear, Raycast, Vercel & Supabase Studio inspired).
-- **Core Principle:** Maximum craft, high depth & elevation, razor-sharp 1px glass borders, ambient lighting, and high-contrast typography.
+## 1. Visual Direction & Cinematic Cyberpunk Identity
+- **Aesthetic:** Million-Dollar High-Craft DevTool / Cyberpunk Terminal (inspired by Ghost in the Shell, Linear 2.0, Raycast, and futuristic IDE consoles).
+- **Canvas Base:** Obsidian Abyss `#020205` overlaid with custom cyber-grid CSS and dynamic multi-point ambient neon flares:
+  - Neon Emerald Glow: `radial-gradient(circle at 15% 10%, rgba(16, 185, 129, 0.12), transparent 45%)`
+  - Cyber Indigo Glow: `radial-gradient(circle at 85% 90%, rgba(99, 102, 241, 0.14), transparent 50%)`
+  - Deep Purple Ambient Core: `radial-gradient(circle at 50% 50%, rgba(147, 51, 234, 0.05), transparent 70%)`
 
-## 2. Color Palette & Ambient Atmosphere
-- **Canvas Base:** `#08080B` with multi-layered ambient radial gradients:
-  - Top Ambient Glow: `radial-gradient(ellipse 90% 60% at 50% -10%, rgba(16, 185, 129, 0.08), transparent 70%)`
-  - Subtle Indigo Accent: `radial-gradient(ellipse 60% 40% at 90% 100%, rgba(99, 102, 241, 0.06), transparent 70%)`
-- **Surface Elevation:**
-  - Sidebar & Panels: `#0D0D11` with `rgba(255, 255, 255, 0.06)` border.
-  - Node Cards: `rgba(22, 22, 28, 0.88)` with `backdrop-blur-xl` and `shadow-2xl shadow-black/60`.
-- **Primary Brand Gradient:** Emerald to Cyan neon (`from-emerald-400 via-teal-400 to-cyan-500`) with subtle drop shadow `0 0 25px rgba(16, 185, 129, 0.3)`.
+## 2. Surfaces, Glassmorphism & Neon Borders
+- **Floating Cards & Panels:** `rgba(8, 8, 12, 0.92)` with `backdrop-blur-2xl` and layered depth shadows `shadow-[0_0_50px_rgba(0,0,0,0.9)]`.
+- **Dynamic Laser Borders:** Razor-sharp 1px border transitions from `border-zinc-800/80` to animated neon cyber emerald `border-emerald-500/60` with electric glow `0 0 25px rgba(16, 185, 129, 0.35)`.
+- **Accent Lighting:** Laser top edge highlights (`h-[2px] bg-gradient-to-r from-emerald-500 via-cyan-400 to-indigo-500`).
 
-## 3. Data Type Badges
-- `PK` (Primary Key): Amber `#F59E0B` on `rgba(245, 158, 11, 0.12)` + border `rgba(245, 158, 11, 0.25)`
-- `FK` (Foreign Key): Indigo `#818CF8` on `rgba(99, 102, 241, 0.14)` + border `rgba(99, 102, 241, 0.3)`
-- `string` / `varchar`: Emerald `#34D399` on `rgba(16, 185, 129, 0.1)`
-- `number` / `int` / `decimal`: Cyan `#22D3EE` on `rgba(6, 182, 212, 0.1)`
-- `boolean`: Purple `#C084FC` on `rgba(168, 85, 247, 0.1)`
-- `array` / `object`: Pink `#F472B6` on `rgba(236, 72, 153, 0.1)`
+## 3. High-Contrast Cyber Badges
+- `PK` (Primary Key): Golden Amber `#F59E0B` text + `rgba(245, 158, 11, 0.15)` bg + `border-amber-500/40` + amber glow `0 0 10px rgba(245, 158, 11, 0.25)`.
+- `FK` (Foreign Key): Electric Indigo `#818CF8` text + `rgba(99, 102, 241, 0.18)` bg + `border-indigo-500/40` + purple-indigo laser glow.
+- `VARCHAR` / `TEXT` / `STRING`: Neon Emerald `#10B981` on `rgba(16, 185, 129, 0.12)` + `border-emerald-500/30`.
+- `INT` / `DECIMAL` / `NUMBER`: Cyber Cyan `#06B6D4` on `rgba(6, 182, 212, 0.12)` + `border-cyan-500/30`.
+- `BOOLEAN`: Cyber Violet `#A855F7` on `rgba(168, 85, 247, 0.12)` + `border-purple-500/30`.
 
-## 4. Typography
-- **Headings & UI Controls:** `Inter`, letter-spacing `-0.02em` (`tracking-tight`), weights `500` to `700`.
-- **Code & Schemas:** `JetBrains Mono`, tight height, `text-[11px]` - `text-[12px]` for compact information density.
+## 4. Typography & Telemetry
+- **UI Navigation & Branding:** `Inter` ultra-tight tracking (`tracking-tight`), uppercase subheadings (`tracking-widest text-[10px] uppercase font-mono`).
+- **Code, Schema Keys, Data Badges & Counters:** `JetBrains Mono` with precision line heights and high-contrast rendering.

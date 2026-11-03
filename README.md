@@ -12,7 +12,7 @@
 ---
 
 <div align="center">
-  <img src="public/preview-banner.png" alt="RawMap Studio Preview" width="100%" />
+  <img src="public/preview-banner.png?v=2" alt="RawMap Studio Preview" width="100%" />
 </div>
 
 ## ✨ Why RawMap?

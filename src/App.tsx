@@ -11,8 +11,15 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { SchemaNode } from './components/SchemaNode';
+import { ExportModal } from './components/ExportModal';
 import { samples } from './parsers/samples';
 import { parseUniversalInput } from './parsers';
+import {
+  generatePrismaSchema,
+  generateDrizzleSchema,
+  generateTypeScriptInterfaces,
+} from './parsers/generators';
+import { encodeStateToHash, decodeHashToState } from './parsers/urlState';
 import {
   Sparkles,
   Download,
@@ -25,6 +32,9 @@ import {
   ArrowUpDown,
   Zap,
   Cpu,
+  Share2,
+  Code2,
+  Box,
 } from 'lucide-react';
 import { toPng } from 'html-to-image';
 
@@ -33,13 +43,37 @@ const nodeTypes = { schemaNode: SchemaNode };
 type PresetType = 'sql' | 'json' | 'csv';
 
 export default function App() {
-  const [inputCode, setInputCode] = useState(samples.sql);
+  // Load initial state from URL Hash if available
+  const initialUrlState = useMemo(() => {
+    if (typeof window !== 'undefined' && window.location.hash) {
+      return decodeHashToState(window.location.hash);
+    }
+    return null;
+  }, []);
+
+  const [inputCode, setInputCode] = useState(initialUrlState ? initialUrlState.code : samples.sql);
   const [activePreset, setActivePreset] = useState<PresetType>('sql');
   const [searchQuery, setSearchQuery] = useState('');
-  const [layoutDir, setLayoutDir] = useState<'LR' | 'TB'>('LR');
-  const [copied, setCopied] = useState(false);
+  const [layoutDir, setLayoutDir] = useState<'LR' | 'TB'>(initialUrlState ? initialUrlState.direction : 'LR');
+  const [copiedContext, setCopiedContext] = useState(false);
+  const [copiedShare, setCopiedShare] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const flowContainerRef = useRef<HTMLDivElement>(null);
+
+  // Modal State for Code Generator
+  const [modalConfig, setModalConfig] = useState<{
+    isOpen: boolean;
+    title: string;
+    code: string;
+    language: string;
+    filename: string;
+  }>({
+    isOpen: false,
+    title: '',
+    code: '',
+    language: '',
+    filename: '',
+  });
 
   const [nodes, setNodes, onNodesChange] = useNodesState<any>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<any>([]);
@@ -113,6 +147,16 @@ export default function App() {
     });
   }, [nodes, searchQuery]);
 
+  // Shareable URL Link
+  const handleShareLink = useCallback(() => {
+    const hash = encodeStateToHash({ code: inputCode, direction: layoutDir });
+    const shareableUrl = `${window.location.origin}${window.location.pathname}#${hash}`;
+    window.history.replaceState(null, '', `#${hash}`);
+    navigator.clipboard.writeText(shareableUrl);
+    setCopiedShare(true);
+    setTimeout(() => setCopiedShare(false), 2000);
+  }, [inputCode, layoutDir]);
+
   // Export 4K PNG with cinematic dark canvas
   const handleExportPNG = useCallback(() => {
     const viewportElement = document.querySelector('.react-flow__viewport') as HTMLElement;
@@ -145,11 +189,46 @@ export default function App() {
   const handleCopyAIContext = () => {
     const markdown = `# RawMap Architecture Context // Telemetry Map\n- **Target Schema Type:** ${formatInfo.type}\n- **Total Active Entities:** ${nodes.length}\n- **Total Synaptic Relations:** ${edges.length}\n\n\`\`\`json\n${inputCode.slice(0, 1800)}\n\`\`\``;
     navigator.clipboard.writeText(markdown);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    setCopiedContext(true);
+    setTimeout(() => setCopiedContext(false), 2000);
   };
 
-  // Line numbering for code studio
+  // Open Prisma Generator Modal
+  const handleOpenPrisma = () => {
+    const code = generatePrismaSchema(nodes);
+    setModalConfig({
+      isOpen: true,
+      title: 'Prisma Schema Export (schema.prisma)',
+      code,
+      language: 'prisma',
+      filename: 'schema.prisma',
+    });
+  };
+
+  // Open Drizzle Generator Modal
+  const handleOpenDrizzle = () => {
+    const code = generateDrizzleSchema(nodes);
+    setModalConfig({
+      isOpen: true,
+      title: 'Drizzle ORM Schema Export (schema.ts)',
+      code,
+      language: 'typescript',
+      filename: 'schema.ts',
+    });
+  };
+
+  // Open TypeScript Generator Modal
+  const handleOpenTypeScript = () => {
+    const code = generateTypeScriptInterfaces(nodes);
+    setModalConfig({
+      isOpen: true,
+      title: 'TypeScript Interface Types (types.d.ts)',
+      code,
+      language: 'typescript',
+      filename: 'types.d.ts',
+    });
+  };
+
   const codeLines = useMemo(() => inputCode.split('\n'), [inputCode]);
 
   return (
@@ -158,7 +237,7 @@ export default function App() {
       {/* 🚀 1. Cinematic Cyberpunk Header */}
       <header className="h-16 border-b border-white/[0.08] bg-[#08080C]/85 backdrop-blur-2xl px-6 flex items-center justify-between z-30 shrink-0 shadow-[0_4px_30px_rgba(0,0,0,0.8)]">
         
-        {/* BRAND IDENTITY: Glowing Logo & Live Pulse */}
+        {/* BRAND IDENTITY */}
         <div className="flex items-center space-x-3.5">
           <div className="relative group cursor-pointer">
             <div className="absolute -inset-1.5 bg-gradient-to-r from-emerald-500 via-cyan-400 to-indigo-500 rounded-xl blur-sm opacity-50 group-hover:opacity-100 transition duration-300" />
@@ -184,7 +263,7 @@ export default function App() {
           </div>
         </div>
 
-        {/* CENTER INTERACTIVE PRESET CAPSULES with Shortcuts */}
+        {/* CENTER PRESETS */}
         <div className="hidden md:flex items-center p-1 rounded-xl bg-white/[0.03] border border-white/[0.08] backdrop-blur-md shadow-inner space-x-1">
           <button
             onClick={() => selectPreset('sql')}
@@ -226,24 +305,52 @@ export default function App() {
           </button>
         </div>
 
-        {/* RIGHT ACTION SUITE: Search, Direction & High-Glow Buttons */}
-        <div className="flex items-center space-x-2.5">
-          {/* Neon Search Glass Box */}
-          <div className="relative w-48 lg:w-60 hidden sm:block">
+        {/* RIGHT ACTION SUITE */}
+        <div className="flex items-center space-x-2">
+          {/* Neon Search Box */}
+          <div className="relative w-36 lg:w-48 hidden sm:block">
             <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
             <input
               type="text"
-              placeholder="Search telemetry..."
+              placeholder="Search..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-[#0a0a0f] border border-white/[0.08] hover:border-emerald-500/40 rounded-lg pl-8 pr-3 py-1.5 text-xs text-zinc-200 font-mono placeholder-zinc-500 focus:outline-none focus:border-emerald-400 focus:shadow-[0_0_15px_rgba(16,185,129,0.25)] transition-all"
+              className="w-full bg-[#0a0a0f] border border-white/[0.08] hover:border-emerald-500/40 rounded-lg pl-8 pr-3 py-1.5 text-xs text-zinc-200 font-mono placeholder-zinc-500 focus:outline-none focus:border-emerald-400 transition-all"
             />
+          </div>
+
+          {/* Code Generators Dropdown / Buttons */}
+          <div className="hidden xl:flex items-center space-x-1 p-1 rounded-lg bg-white/[0.03] border border-white/[0.08]">
+            <button
+              onClick={handleOpenPrisma}
+              className="px-2.5 py-1 text-[11px] font-mono text-zinc-300 hover:text-white hover:bg-white/[0.05] rounded transition-colors flex items-center gap-1 cursor-pointer"
+              title="Export as Prisma Schema"
+            >
+              <Box size={12} className="text-indigo-400" />
+              <span>Prisma</span>
+            </button>
+            <button
+              onClick={handleOpenDrizzle}
+              className="px-2.5 py-1 text-[11px] font-mono text-zinc-300 hover:text-white hover:bg-white/[0.05] rounded transition-colors flex items-center gap-1 cursor-pointer"
+              title="Export as Drizzle ORM Schema"
+            >
+              <Code2 size={12} className="text-cyan-400" />
+              <span>Drizzle</span>
+            </button>
+            <button
+              onClick={handleOpenTypeScript}
+              className="px-2.5 py-1 text-[11px] font-mono text-zinc-300 hover:text-white hover:bg-white/[0.05] rounded transition-colors flex items-center gap-1 cursor-pointer"
+              title="Export as TypeScript Interfaces"
+            >
+              <span className="text-blue-400 font-bold text-[10px]">TS</span>
+              <span>Types</span>
+            </button>
           </div>
 
           {/* Direction Switcher */}
           <button
             onClick={() => setLayoutDir(layoutDir === 'LR' ? 'TB' : 'LR')}
-            className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-[#0e0e16] hover:bg-zinc-800 border border-white/[0.08] text-xs font-mono text-zinc-300 transition-all cursor-pointer"
+            className="flex items-center space-x-1 px-2.5 py-1.5 rounded-lg bg-[#0e0e16] hover:bg-zinc-800 border border-white/[0.08] text-xs font-mono text-zinc-300 transition-all cursor-pointer"
             title={`Direction: ${layoutDir === 'LR' ? 'Horizontal LR' : 'Vertical TB'}`}
           >
             {layoutDir === 'LR' ? (
@@ -254,42 +361,42 @@ export default function App() {
             <span>{layoutDir}</span>
           </button>
 
+          {/* Share Link */}
+          <button
+            onClick={handleShareLink}
+            className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-[#0e0e16] hover:bg-zinc-800 border border-white/[0.08] text-xs font-mono text-zinc-300 transition-all cursor-pointer"
+            title="Share interactive graph with encrypted URL"
+          >
+            {copiedShare ? <Check size={13} className="text-emerald-400" /> : <Share2 size={13} />}
+            <span className="hidden lg:inline">{copiedShare ? 'LINK COPIED' : 'SHARE'}</span>
+          </button>
+
           {/* Copy AI Context Button */}
           <button
             onClick={handleCopyAIContext}
-            className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg bg-[#0e0e16] hover:bg-zinc-800/90 border border-emerald-500/40 text-xs font-mono font-semibold text-emerald-300 hover:text-white transition-all shadow-[0_0_15px_rgba(16,185,129,0.15)] hover:shadow-[0_0_20px_rgba(16,185,129,0.3)] cursor-pointer"
+            className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-[#0e0e16] hover:bg-zinc-800/90 border border-emerald-500/40 text-xs font-mono font-semibold text-emerald-300 hover:text-white transition-all shadow-[0_0_15px_rgba(16,185,129,0.15)] cursor-pointer"
           >
-            {copied ? (
-              <>
-                <Check size={13} className="text-emerald-400" />
-                <span className="hidden lg:inline">COPIED CONTEXT</span>
-              </>
-            ) : (
-              <>
-                <Sparkles size={13} className="text-emerald-400" />
-                <span className="hidden lg:inline">COPY AI CONTEXT</span>
-              </>
-            )}
+            {copiedContext ? <Check size={13} className="text-emerald-400" /> : <Sparkles size={13} className="text-emerald-400" />}
+            <span className="hidden lg:inline">{copiedContext ? 'COPIED' : 'AI CONTEXT'}</span>
           </button>
 
           {/* Export 4K PNG Button */}
           <button
             onClick={handleExportPNG}
             disabled={isExporting}
-            className="flex items-center space-x-2 px-4 py-1.5 rounded-lg bg-gradient-to-r from-emerald-400 via-teal-400 to-cyan-400 hover:from-emerald-300 hover:to-cyan-300 text-zinc-950 text-xs font-mono font-bold tracking-tight transition-all shadow-[0_0_25px_rgba(16,185,129,0.4)] hover:shadow-[0_0_35px_rgba(16,185,129,0.6)] disabled:opacity-50 cursor-pointer"
+            className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-emerald-400 via-teal-400 to-cyan-400 hover:from-emerald-300 hover:to-cyan-300 text-zinc-950 text-xs font-mono font-bold tracking-tight transition-all shadow-[0_0_20px_rgba(16,185,129,0.35)] disabled:opacity-50 cursor-pointer"
           >
             <Download size={13} className="stroke-[2.5]" />
-            <span>{isExporting ? 'EXPORTING...' : 'EXPORT 4K PNG'}</span>
+            <span>{isExporting ? 'EXPORT...' : 'EXPORT 4K'}</span>
           </button>
         </div>
       </header>
 
-      {/* 🖥️ 2. Main High-Performance Studio: Left Code IDE + Right Cyber Canvas */}
+      {/* 🖥️ 2. Main High-Performance Studio */}
       <div className="flex flex-1 overflow-hidden">
         
-        {/* LEFT PANEL: Professional Terminal Code Studio */}
+        {/* LEFT PANEL: Code Studio */}
         <section className="w-[390px] bg-[#06060a] border-r border-white/[0.08] flex flex-col shrink-0 z-20 shadow-2xl">
-          {/* Terminal Title Bar */}
           <div className="h-11 px-4 bg-[#0a0a10] border-b border-white/[0.08] flex items-center justify-between">
             <div className="flex items-center space-x-2">
               <div className="flex items-center space-x-1.5 mr-2">
@@ -314,16 +421,13 @@ export default function App() {
             </div>
           </div>
 
-          {/* Code Editor Body with Line Numbering */}
           <div className="flex-1 flex overflow-hidden bg-[#040407]">
-            {/* Gutter Line Numbers */}
             <div className="w-11 py-3.5 bg-[#030306] border-r border-white/[0.04] text-zinc-600 font-mono text-[11px] select-none text-right pr-2 leading-relaxed overflow-hidden">
               {codeLines.map((_, i) => (
                 <div key={i}>{i + 1}</div>
               ))}
             </div>
 
-            {/* Code Input Textarea */}
             <textarea
               value={inputCode}
               onChange={(e) => setInputCode(e.target.value)}
@@ -333,7 +437,6 @@ export default function App() {
             />
           </div>
 
-          {/* Real-time IDE Telemetry Status Bar */}
           <footer className="h-10 px-4 bg-[#0a0a10] border-t border-white/[0.08] flex items-center justify-between text-[11px] font-mono text-zinc-400">
             <div className="flex items-center space-x-2 text-zinc-400">
               <Activity size={12} className="text-emerald-400 animate-pulse" />
@@ -346,12 +449,12 @@ export default function App() {
               <Layers size={12} />
               <span>{nodes.length} nodes</span>
               <span className="text-zinc-600">//</span>
-              <span className="text-indigo-400">{edges.length} active links</span>
+              <span className="text-indigo-400">{edges.length} links</span>
             </div>
           </footer>
         </section>
 
-        {/* RIGHT PANEL: High-Craft Cyberpunk Canvas */}
+        {/* RIGHT PANEL: Canvas */}
         <main ref={flowContainerRef} className="flex-1 relative cyber-canvas-surface overflow-hidden">
           <ReactFlow
             nodes={filteredNodes}
@@ -389,6 +492,16 @@ export default function App() {
         </main>
 
       </div>
+
+      {/* Code Export Modal for Prisma, Drizzle, and TypeScript */}
+      <ExportModal
+        isOpen={modalConfig.isOpen}
+        onClose={() => setModalConfig((prev) => ({ ...prev, isOpen: false }))}
+        title={modalConfig.title}
+        code={modalConfig.code}
+        language={modalConfig.language}
+        filename={modalConfig.filename}
+      />
     </div>
   );
 }

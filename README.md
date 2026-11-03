@@ -41,10 +41,10 @@ npm run dev
 - [x] Universal auto-detection for JSON, SQL DDL, and CSV
 - [x] Interactive auto-layout (Horizontal LR & Vertical TB via Dagre)
 - [x] 1-Click LLM Context Markdown generator
-- [x] High-res PNG canvas export
-- [ ] Export visual graph to Prisma Schema (.prisma) & Drizzle ORM
-- [ ] TypeScript Interface (type / interface) generator from JSON/CSV
-- [ ] Shareable encrypted URL links
+- [x] High-res PNG canvas export (4K screenshot-ready)
+- [x] Export visual graph to Prisma Schema (.prisma) & Drizzle ORM
+- [x] TypeScript Interface (types.d.ts) generator from JSON/SQL/CSV
+- [x] Shareable encrypted URL links via Base64 Hash state
 
 ## 🤝 Contributing
 Contributions, issues, and feature requests are welcome! Feel free to check the [issues page](https://github.com/Yogiexc/rawmap/issues) or start a conversation in [Discussions](https://github.com/Yogiexc/rawmap/discussions).
